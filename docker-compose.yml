@@ -1,0 +1,62 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres_container
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}  # Usando variáveis de ambiente com valor padrão
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Abc123}  # Evita expor senhas diretamente no código
+      POSTGRES_DB: ${POSTGRES_DB:-2desk}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - app_network
+
+  rabbitmq:
+    image: "rabbitmq:management"
+    container_name: rabbitmq_container
+    ports:
+      - "15672:15672"  # Porta para a interface de gerenciamento do RabbitMQ
+      - "5672:5672"    # Porta para conexão com o RabbitMQ
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-user}  # Usando variáveis de ambiente
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-password}
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    networks:
+      - app_network
+
+  app:
+    build:
+      context: .  # Constrói a partir do diretório atual
+    container_name: chat2desk_app
+    environment:
+      - NODE_ENV=production
+      - POSTGRES_USER=${POSTGRES_USER:-admin}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-Abc123}
+      - POSTGRES_DB=${POSTGRES_DB:-2desk}
+      - POSTGRES_HOST=postgres
+      - POSTGRES_PORT=5432
+      - POSTGRES_URL=postgres://${POSTGRES_USER:-admin}:${POSTGRES_PASSWORD:-Abc123}@postgres:5432/${POSTGRES_DB:-2desk}
+      - JWT_SECRET=${JWT_SECRET:-oluapksed2}  # Usando variável de ambiente para o segredo JWT
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-user}:${RABBITMQ_PASSWORD:-password}@rabbitmq:5672
+    ports:
+      - "3000:3000"
+    depends_on:
+      - postgres
+      - rabbitmq
+    networks:
+      - app_network
+    command: /wait-for-it.sh postgres:5432 -- npm run start:prod
+
+volumes:
+  postgres_data:
+  rabbitmq_data:
+
+networks:
+  app_network:
+    driver: bridge
